@@ -79,6 +79,7 @@ configure_usb_gadget() {
 
     # Clean previous configuration
     cleanup_usb_gadget
+
     # Create new USB gadget configuration
     mkdir -p "$GADGET_DIR" || { add_run_log "[ERROR] Could not create gadget dir"; return 1; }
     cd "$GADGET_DIR"  # Change to gadget directory
@@ -121,6 +122,7 @@ configure_usb_gadget() {
         ((retry++))  # Increment retry count
     done
     [ $retry -eq 10 ] && { add_run_log "[ERROR] usb0 not found"; return 1; }  # Fail after max retries
+    return 0
 }
 
 # Clean USB gadget configuration function
@@ -133,6 +135,7 @@ cleanup_usb_gadget() {
         rmdir "$GADGET_DIR"/{configs/c.1,functions/{rndis,ecm}.usb0} 2>/dev/null || true
         rmdir "$GADGET_DIR" 2>/dev/null || true  # Remove gadget directory
     }
+    return 0
 }
 
 # Configure network interface function
@@ -152,6 +155,7 @@ configure_network() {
         add_run_log "[ERROR] No ip or ifconfig found"  # Both commands don't exist
         return 1
     fi
+    return 0
 }
 
 # Start DHCP service function
@@ -174,12 +178,14 @@ EOF
     
     # Check if process is actually running
     kill -0 $pid 2>/dev/null && add_run_log "[INFO] DHCP started (PID: $pid)" || { add_run_log "[ERROR] dnsmasq failed to start"; return 1; }  # Check if process is alive
+    return 0
 }
 
 # Stop DHCP service function
 stop_dhcp_service() {
     pkill -f "dnsmasq.*usb_dhcp.conf" 2>/dev/null || true  # Kill matching dnsmasq processes
     rm -f "/tmp/usb_*.conf" 2>/dev/null || true  # Delete temporary config files
+    return 0
 }
 
 # Start SSH service function
@@ -219,6 +225,7 @@ start_ssh_service() {
     # Verify SSH service is actually running
     pgrep -x sshd >/dev/null || systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null || { add_run_log "[WARNING] SSH may not be running"; return 1; }  # Check if SSH is running
     add_run_log "[INFO] SSH confirmed running"  # Record confirmation of running
+    return 0
 }
 
 # Setup gamepad support function
@@ -229,6 +236,7 @@ setup_gamepad_support() {
         pkill -f "gptokeyb -1 $SCRIPT_NAME" 2>/dev/null || true  # Kill previous gptokeyb instance
         /opt/inttools/gptokeyb -1 $SCRIPT_NAME -c "/opt/inttools/keys.gptk" >/dev/null 2>&1 &  # Start gptokeyb
     } || add_run_log "[WARNING] Gamepad support disabled. gptokeyb not found."  # gptokeyb doesn't exist
+    return 0
 }
 
 # Main execution function
@@ -238,13 +246,13 @@ main() {
     
     # Configure various components
     configure_usb_gadget && add_run_log "[OK] USB Gadget configured" || add_run_log "[ERROR] USB Gadget configuration failed"  # Configure USB gadget
-    configure_network && add_run_log "[OK] Network configured" || add_run_log "[WARNING] Network configuration failed"  # Configure network
-    start_dhcp_service && add_run_log "[OK] DHCP service started" || add_run_log "[WARNING] DHCP service start failed"  # Start DHCP service
-    start_ssh_service && add_run_log "[OK] SSH service started" || add_run_log "[WARNING] SSH service start failed"  # Start SSH service
+    configure_network && add_run_log "[OK] Network configured" || add_run_log "[ERROR] Network configuration failed"  # Configure network
+    start_dhcp_service && add_run_log "[OK] DHCP service started" || add_run_log "[ERROR] DHCP service start failed"  # Start DHCP service
+    start_ssh_service && add_run_log "[OK] SSH service started" || add_run_log "[ERROR] SSH service start failed"  # Start SSH service
     
     # Prepare connection information
     local connection_info="Plug the USB cable into OTG port and connect via SSH/SFTP:\nark@$DEVICE_IP (default password is: ark)\n\nIf auto-configuration fails, set your network adapter to:\nIP: 192.168.7.2, Netmask: 255.255.255.0\n\nOK to exit\n"
-    safe_msgbox "$connection_info\n$RUN_LOG" 14 70  # Display connection info and logs
+    safe_msgbox "$connection_info\n$RUN_LOG" 12 70  # Display connection info and logs
 }
 
 # Cleanup function - Execute when script exits
@@ -253,6 +261,7 @@ cleanup() {
     cleanup_usb_gadget  # Clean USB gadget
     printf "\033c\e[?25h" > "$CURR_TTY"  # Clear screen and show cursor
     pkill -f "gptokeyb -1 $SCRIPT_NAME" 2>/dev/null || true  # Stop gamepad mapping
+    return 0
 }
 
 # Check root permission
@@ -263,4 +272,3 @@ trap cleanup EXIT SIGINT SIGTERM
 
 # Execute main function
 main
-
